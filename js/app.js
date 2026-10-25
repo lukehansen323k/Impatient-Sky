@@ -184,6 +184,16 @@ function tonightNoon(loc, now = Date.now()) {
   if (hour < 12) day -= 1;
   return day * 864e5 + 12 * 3.6e6 - off;
 }
+// When a night is over: at dawn (end of the dark window), or at solar midnight
+// when it never gets dark enough.
+const nightEnd = (noon, win) => (win.neverDark ? noon + 12 * 3.6e6 : win.end);
+// "Tonight" = the night that hasn't ended yet. After dawn it's already the
+// coming evening; between midnight and dawn it's still the night in progress.
+function currentNightNoon(loc, now = Date.now()) {
+  const obs = new Observer(loc.lat, loc.lon, loc.alt || 0);
+  const noon = tonightNoon(loc, now);
+  return now >= nightEnd(noon, darkWindow(obs, noon, S.settings.sunAlt)) ? noon + 864e5 : noon;
+}
 function passOpts(limit) {
   const st = S.settings;
   const skip = [];
@@ -209,7 +219,7 @@ async function runNights() {
   S.nightsBase = base;
   S.computedLimit = st.limit;
   const obs = new Observer(loc.lat, loc.lon, loc.alt || 0);
-  const noon0 = tonightNoon(loc);
+  const noon0 = currentNightNoon(loc);
   const prevSel = S.nights[S.weekSel]?.noon;
   S.nights = Array.from({ length: 7 }, (_, i) => {
     const noon = noon0 + i * 864e5;
@@ -240,7 +250,7 @@ async function runNights() {
 }
 const baseKey = (loc) => {
   const st = S.settings;
-  return [S.catalog?.v, tonightNoon(loc), loc.lat.toFixed(2), loc.lon.toFixed(2), st.minEl, st.sunAlt, st.extinction, st.starlink, st.mega].join('|');
+  return [S.catalog?.v, currentNightNoon(loc), loc.lat.toFixed(2), loc.lon.toFixed(2), st.minEl, st.sunAlt, st.extinction, st.starlink, st.mega].join('|');
 };
 
 const visiblePasses = (night) => (night?.passes || []).filter((p) => p.mag <= S.settings.limit);
@@ -774,7 +784,8 @@ function tick() {
   }
   // a new night has begun (solar noon passed) → shift the week
   const loc = currentLoc();
-  if (loc && S.nights[0] && tonightNoon(loc, now) !== S.nights[0].noon) recompute();
+  const n0 = S.nights[0];
+  if (loc && n0 && n0.win && now >= nightEnd(n0.noon, n0.win)) recompute();
   if (now - lastTick > 20000) { lastTick = now; if (S.view !== 'settings') renderAll(); }
 }
 
