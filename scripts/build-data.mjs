@@ -211,13 +211,20 @@ const CONSTELLATION_RULES = [
   [/^STARLINK/i, 7.15],
   [/^ONEWEB/i, 7.05],
   [/^(QIANFAN|G60)/i, 5.24],
-  [/^(BLUEBIRD|BLUE WALKER|BW3)/i, 3.77],
+  [/^(BLUEBIRD|BLUE WALKER|BW3|SPACEMOBILE)/i, 3.77],
   [/^(GUOWANG|HULIANWANG|SATNET)/i, 4.21],
   [/^KUIPER/i, 6.7], // no published survey yet; assumed similar to Starlink Mini
 ];
 
+// Hand-set values (McCants scale) for bright objects qs.mag doesn't cover yet.
+const OVERRIDES = {
+  48274: -0.5, // CSS (Tianhe) with Wentian & Mengtian docked; observed to about mag -2.5
+  59588: 2.0,  // ACS3 solar sail (80 m^2)
+};
+
 export function assignMagnitude(rec, qs, satcat) {
   const id = rec.NORAD_CAT_ID;
+  if (id in OVERRIDES) return [OVERRIDES[id], 'O'];
   if (qs.has(id)) return [qs.get(id), 'Q'];
   for (const [re, m] of CONSTELLATION_RULES) if (re.test(rec.OBJECT_NAME)) return [+(m + MEAN_TO_MCCANTS).toFixed(2), 'C'];
   const sc = satcat[String(id)];
@@ -226,6 +233,8 @@ export function assignMagnitude(rec, qs, satcat) {
   if (size === 'LARGE') return [5.5, 'S'];
   if (size === 'MEDIUM') return [7.5, 'S'];
   if (size === 'SMALL') return [9.0, 'S'];
+  // CelesTrak's "visual" group is curated from the brightest objects.
+  if (rec._groups?.has('visual')) return [4.0, 'V'];
   const type = (rec.OBJECT_TYPE || sc?.[0] || '').toUpperCase();
   if (type.startsWith('R')) return [5.5, 'D'];       // rocket body
   if (type.startsWith('DEB') || type === 'DEBRIS') return [8.5, 'D'];
@@ -316,17 +325,32 @@ async function main() {
   sources.qsmag = qs.size;
   sources.satcat = Object.keys(satcat).length;
 
+  // Docked vehicles (Soyuz, Dragon, Tianzhou, station modules...) share their
+  // station's element set; keep one object per identical orbit.
+  const orbitKey = (r) => `${r.MEAN_MOTION.toFixed(6)}|${r.RA_OF_ASC_NODE.toFixed(3)}|${((r.ARG_OF_PERICENTER + r.MEAN_ANOMALY) % 360).toFixed(2)}|${r.EPOCH}`;
+  const PRIMARY = new Set([25544, 48274]);
+  const seen = new Set();
+  let docked = 0;
+  const ordered = [...merged.values()].sort((a, b) =>
+    (PRIMARY.has(b.NORAD_CAT_ID) - PRIMARY.has(a.NORAD_CAT_ID)) || a.NORAD_CAT_ID - b.NORAD_CAT_ID);
+  for (const rec of ordered) {
+    const k = orbitKey(rec);
+    if (seen.has(k)) { merged.delete(rec.NORAD_CAT_ID); docked++; continue; }
+    seen.add(k);
+  }
+
   const now = Date.now();
   const rows = [];
-  const counts = { kept: 0, stale: 0, faint: 0, decaying: 0 };
+  const counts = { kept: 0, stale: 0, faint: 0, decaying: 0, geo: 0, docked };
   let newestEpoch = '';
   for (const rec of merged.values()) {
     const epochMs = Date.parse(rec.EPOCH.endsWith('Z') ? rec.EPOCH : rec.EPOCH + 'Z');
     if (!Number.isFinite(epochMs) || (now - epochMs) / 864e5 > MAX_EPOCH_AGE_D) { counts.stale++; continue; }
     const hp = perigeeKm(rec);
     if (hp < 130) { counts.decaying++; continue; }
+    if (rec.MEAN_MOTION < 1.2) { counts.geo++; continue; } // geosynchronous objects never pass
     let [mag, msrc] = assignMagnitude(rec, qs, satcat);
-    if (msrc === 'D' && rec._prevMag && rec._prevMag[1] !== 'D') [mag, msrc] = rec._prevMag; // qs.mag temporarily unavailable
+    if ((msrc === 'D' || msrc === 'V') && rec._prevMag && rec._prevMag[1] === 'Q') [mag, msrc] = rec._prevMag; // qs.mag temporarily unavailable
     const best = mag + 5 * Math.log10(Math.max(hp, 150) / 1000);
     if (best > MAX_STD_MAG_KEEP) { counts.faint++; continue; }
     if (rec.EPOCH > newestEpoch) newestEpoch = rec.EPOCH;
