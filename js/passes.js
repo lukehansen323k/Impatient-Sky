@@ -47,12 +47,33 @@ export function buildSats(catalog) {
 
 // ECI position at ms (TEME, km) into out; false if the propagator fails (decayed).
 const _pos = [0, 0, 0];
+const _vel = [0, 0, 0]; // velocity of the most recent propagate() call
 export function propagate(sat, ms, out = _pos) {
   const tsince = (jdFromMs(ms) - sat.epochJd) * 1440;
   const r = sgp4(sat.satrec, tsince);
   if (!r || !r.position || Number.isNaN(r.position.x)) return false;
   out[0] = r.position.x; out[1] = r.position.y; out[2] = r.position.z;
+  _vel[0] = r.velocity.x; _vel[1] = r.velocity.y; _vel[2] = r.velocity.z;
   return out;
+}
+
+// How long (min) until this satellite could possibly get above the horizon.
+// Two lower bounds, take the larger:
+//  1. it must close its geocentric gap at no more than its fastest angular rate;
+//  2. the observer must first rotate (with the Earth) to within reach of the
+//     orbit plane, which happens only twice a day.
+function minutesToReach(sat, f, x, y, z, gap) {
+  let skip = (gap - 0.02) / sat.wMax;
+  const hx = y * _vel[2] - z * _vel[1], hy = z * _vel[0] - x * _vel[2], hz = x * _vel[1] - y * _vel[0];
+  const hn = Math.sqrt(hx * hx + hy * hy + hz * hz);
+  const ro = Math.sqrt(f.px * f.px + f.py * f.py + f.pz * f.pz);
+  const beta = Math.asin(Math.min(1, Math.abs(hx * f.px + hy * f.py + hz * f.pz) / (hn * ro)));
+  const reach = Math.acos(Math.min(1, ro / (RE + sat.apogee))) + 0.03;
+  if (beta > reach) {
+    const wPlane = W_EARTH * Math.sqrt(f.px * f.px + f.py * f.py) / ro + 3e-4;
+    skip = Math.max(skip, (beta - reach) / wPlane);
+  }
+  return skip;
 }
 
 // Geocentric angle by which the satellite still has to "close" before it can
@@ -105,8 +126,8 @@ export function satPasses(sat, obs, grid, opts) {
     if (!propagate(sat, t, p)) return out;
     const f = frames[k];
     const gap = horizonGap(f, p[0], p[1], p[2]);
-    if (gap > 0.03) {
-      const skipMin = (gap - 0.02) / sat.wMax;
+    if (gap > 0.03 && !opts.bruteForce) {
+      const skipMin = minutesToReach(sat, f, p[0], p[1], p[2], gap);
       k += Math.max(1, Math.floor((skipMin * 60) / GRID_S));
       continue;
     }
@@ -143,6 +164,7 @@ function scanPass(sat, obs, grid, kStart, opts, out) {
   const tEnd = t0 + (n - 1) * GRID_S * 1000;
   const p = [0, 0, 0], la = [0, 0, 0], f = {};
   const step = FINE_S * 1000 * Math.min(6, Math.max(1, sat.period / 100));
+  const visCut = Math.max(opts.limit, opts.eyeLimit ?? 5);
   let t = t0 + kStart * GRID_S * 1000;
   let seg = null, wasUp = false;
   let prev = null;
@@ -160,7 +182,8 @@ function scanPass(sat, obs, grid, kStart, opts, out) {
     const lit = sunlitFraction(p[0], p[1], p[2], s);
     const ph = phaseAngle(p[0], p[1], p[2], f, s);
     const mag = magnitude(sat.M, la[2], ph, lit, la[1], opts.extinction);
-    const vis = la[1] >= opts.minEl && lit >= SUNLIT_MIN && sAlt <= opts.sunAltMax;
+    // "visible" = high enough, sunlit, dark enough, and bright enough to actually see
+    const vis = la[1] >= opts.minEl && lit >= SUNLIT_MIN && sAlt <= opts.sunAltMax && mag <= visCut;
     return { t: tt, az: la[0], el: la[1], range: la[2], lit, sAlt, mag, vis };
   };
 
@@ -233,7 +256,7 @@ function why(other, s, opts, ending = false) {
   if (other.el < opts.minEl) return ending ? 'set' : 'rise';
   if (other.lit < SUNLIT_MIN) return ending ? 'shadow' : 'emerges';
   if (other.sAlt > opts.sunAltMax) return 'twilight';
-  return ending ? 'set' : 'rise';
+  return ending ? 'dims' : 'brightens';
 }
 
 function emit(sat, seg, track, opts, out) {
@@ -294,7 +317,7 @@ export function liveSky(sats, obs, t, opts, maxMag) {
     if (sat.liveSkip) { sat.next = Infinity; continue; }
     if (!propagate(sat, t, p)) { sat.next = Infinity; continue; }
     const gap = horizonGap(f, p[0], p[1], p[2]);
-    if (gap > 0.03) { sat.next = t + ((gap - 0.02) / sat.wMax) * 60000; continue; }
+    if (gap > 0.03) { sat.next = t + minutesToReach(sat, f, p[0], p[1], p[2], gap) * 60000; continue; }
     sat.next = 0;
     look(f, p[0], p[1], p[2], la);
     if (la[1] < -3 * DEG) continue;

@@ -59,6 +59,7 @@ export function openAR(ctx) {
     W: 0, H: 0, dpr: 1, f: 600,
     lastReadout: 0,
   };
+  window.__iskyAR = st;
   if (target) { st.manualYaw = target.start.az; st.manualPitch = Math.max(15, target.peak.el * 0.6); }
 
   // ------------------------------------------------------------ sizing

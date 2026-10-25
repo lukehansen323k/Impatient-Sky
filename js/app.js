@@ -314,7 +314,7 @@ function magCurve(p) {
 function rowHtml(p, now) {
   const past = p.end.t < now, live = p.start.t <= now && p.end.t >= now;
   const dur = fmtDur(p.end.t - p.start.t);
-  const shadow = p.endWhy === 'shadow' ? ' · fades' : p.startWhy === 'emerges' ? ' · appears' : '';
+  const shadow = p.endWhy === 'shadow' ? ' · into shadow' : p.startWhy === 'emerges' ? ' · out of shadow' : '';
   return `<div class="row${past ? ' past' : ''}${live ? ' now' : ''}" data-pass="${p.uid}">
     <div class="t">${fmtT(p.start.t)}<small>${dur}</small></div>
     <div class="n"><b>${esc(pretty(p.name))}</b><small>${dirText(p)}${shadow}</small></div>
@@ -577,8 +577,8 @@ function ics(p) {
 function openSheet(p) {
   const sat = S.byId.get(p.id) || {};
   const loc = currentLoc();
-  const whyStart = { rise: 'Rises above your minimum altitude', emerges: 'Emerges from Earth’s shadow', twilight: 'Sky gets dark enough' }[p.startWhy] || '';
-  const whyEnd = { set: 'Drops below your minimum altitude', shadow: 'Fades into Earth’s shadow', twilight: 'Sky gets too bright', window: 'Dawn' }[p.endWhy] || '';
+  const whyStart = { rise: 'Rises above your minimum altitude', emerges: 'Emerges from Earth’s shadow', twilight: 'Sky gets dark enough', brightens: 'Brightens past magnitude 5' }[p.startWhy] || '';
+  const whyEnd = { set: 'Drops below your minimum altitude', shadow: 'Fades into Earth’s shadow', twilight: 'Sky gets too bright', window: 'Dawn', dims: 'Dims past magnitude 5' }[p.endWhy] || '';
   const ev = (label, sub, s) => `<div class="ev"><div class="tm">${fmtTs(s.t)}</div><div class="what">${label}<small>${sub}</small></div><div class="pos">${Math.round(s.el)}° ${compass(s.az * DEG)}<br><small>${Math.round(s.az)}° az</small></div></div>`;
   const ha = `https://www.heavens-above.com/PassSummary.aspx?satid=${p.id}&lat=${loc.lat.toFixed(4)}&lng=${loc.lon.toFixed(4)}&loc=Here&alt=${Math.round((loc.alt || 0) * 1000)}&tz=UCT`;
   const n2 = `https://www.n2yo.com/satellite/?s=${p.id}`;
