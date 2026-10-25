@@ -457,10 +457,13 @@ function liveMag(p, now) {
 }
 
 // ------------------------------------------------------------------ render: week
+// Upcoming only lists passes that haven't finished yet.
+const upcomingPasses = (night) => { const now = Date.now(); return visiblePasses(night).filter((p) => p.end.t >= now); };
+
 function renderWeek() {
   const strip = $('#day-strip');
   strip.innerHTML = S.nights.map((n) => {
-    const vis = visiblePasses(n);
+    const vis = upcomingPasses(n);
     const label = n.i === 0 ? 'Tonight' : dayFmt(n.noon, { weekday: 'short' });
     const dc = n.passes ? `${vis.length} · ${vis.length ? fmtMag(Math.min(...vis.map((p) => p.mag))) : '–'}` : '…';
     return `<button class="day glass${n.i === S.weekSel ? ' on' : ''}" data-day="${n.i}">
@@ -469,7 +472,7 @@ function renderWeek() {
 
   // brightest of the week
   const done = S.nights.filter((n) => n.passes);
-  const all = done.flatMap((n) => visiblePasses(n)).filter((p) => p.end.t >= Date.now());
+  const all = done.flatMap((n) => upcomingPasses(n));
   const best = all.sort((a, b) => a.mag - b.mag).slice(0, 5);
   $('#w-best').innerHTML = best.length && done.length > 1 ? `<div class="section-label">Brightest this week${done.length < 7 ? ' so far' : ''}</div>
     <div class="glass card table">${best.map((p) => `<div class="best-row" data-pass="${p.uid}">
@@ -478,10 +481,11 @@ function renderWeek() {
 
   const n = S.nights[S.weekSel];
   if (!n) { $('#w-label').textContent = ''; $('#w-table').innerHTML = ''; return; }
-  const vis = visiblePasses(n);
+  const vis = upcomingPasses(n);
   $('#w-label').textContent = `${dayFmt(n.noon, { weekday: 'long', month: 'long', day: 'numeric' })} night${n.win?.neverDark ? '' : ` · dark ${fmtT(n.win.start)}–${fmtT(n.win.end)}`}`;
   const tbl = $('#w-table');
   if (!n.passes) tbl.innerHTML = skeleton(5);
+  else if (!vis.length && visiblePasses(n).length) tbl.innerHTML = `<div class="empty"><b>No more passes tonight</b>Pick another night above.</div>`;
   else if (!vis.length) tbl.innerHTML = `<div class="empty"><b>No passes brighter than ${fmtMag(S.settings.limit)}</b>Raise the limit in Settings to see fainter ones.</div>`;
   else tbl.innerHTML = tableHtml(vis, 'w');
   if (S.weekSel >= 4) tbl.insertAdjacentHTML('beforeend', `<p class="footnote" style="padding:0 16px 10px">Several days out, low satellites can drift by a minute or more as their orbits decay. Times sharpen as fresh orbit data arrives.</p>`);
@@ -651,7 +655,7 @@ function setView(v) {
     if (b.dataset.tab === v) $('#tab-pill').style.transform = `translateX(${i * 84}px)`;
   });
   $('#navbar-title').textContent = { tonight: 'Tonight', week: 'Upcoming', settings: 'Settings' }[v];
-  window.scrollTo({ top: 0 });
+  $('#scroller').scrollTop = 0;
   renderAll();
 }
 
@@ -736,7 +740,7 @@ document.addEventListener('input', (e) => {
   if (t.id === 'fov') { S.settings.fov = +t.value; $('#fov-val').textContent = `${t.value}°`; saveSettings(); }
 });
 
-addEventListener('scroll', () => { $('#navbar').classList.toggle('show', scrollY > 52); }, { passive: true });
+$('#scroller').addEventListener('scroll', (e) => { $('#navbar').classList.toggle('show', e.target.scrollTop > 52); }, { passive: true });
 addEventListener('resize', () => drawStarfield());
 
 // ------------------------------------------------------------------ refresh loop
