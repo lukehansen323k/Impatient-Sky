@@ -112,9 +112,28 @@ export function satPasses(sat, obs, grid, opts) {
     }
     look(f, p[0], p[1], p[2], la);
     if (la[1] < -1 * DEG) { k++; continue; }
-    // Candidate: scan finely from the previous grid point until it sets.
-    const endK = scanPass(sat, obs, grid, Math.max(0, k - 1), opts, out);
-    k = Math.max(k + 1, endK);
+    // Candidate. Walk it on the coarse grid first; most night passes are in
+    // Earth's shadow or too faint, and those never need the fine scan.
+    const kFirst = Math.max(0, k - 1);
+    let kk = k, promising = false;
+    for (; kk < n; kk++) {
+      if (kk > k && !propagate(sat, t0 + kk * GRID_S * 1000, p)) break;
+      const fk = frames[kk];
+      look(fk, p[0], p[1], p[2], la);
+      if (la[1] < -1 * DEG) break;
+      if (promising || la[1] < opts.minEl - 3 * DEG || sunAlt[kk] > opts.sunAltMax + 1 * DEG) continue;
+      const lit = sunlitFraction(p[0], p[1], p[2], suns[kk]);
+      if (lit <= 0) continue;
+      const m = magnitude(sat.M, la[2], phaseAngle(p[0], p[1], p[2], fk, suns[kk]), Math.max(lit, 0.5), la[1], opts.extinction);
+      if (m <= opts.limit + 0.75) promising = true;
+    }
+    if (promising || (kk - kFirst) * GRID_S < 90) {
+      // short passes can hide between grid points; always scan those
+      const endK = scanPass(sat, obs, grid, kFirst, opts, out);
+      k = Math.max(k + 1, endK);
+    } else {
+      k = kk + 1;
+    }
   }
   return out;
 }
@@ -175,16 +194,37 @@ function scanPass(sat, obs, grid, kStart, opts, out) {
     } else if (seg) {
       const last = edge(seg.end, s);
       seg.end = last;
+      if (last.el > seg.peak.el) seg.peak = last;
+      if (last.mag < seg.best.mag) seg.best = last;
       if (last !== track[track.length - 1]) track.push(last);
       seg.endWhy = why(s, last, opts, true);
+      refinePeak(seg, sample);
       emit(sat, seg, track, opts, out);
       seg = null;
     }
     prev = s;
     if (wasUp && s.el < -1.5 * DEG) break;
   }
-  if (seg) { seg.endWhy = 'window'; emit(sat, seg, track, opts, out); }
+  if (seg) { seg.endWhy = 'window'; refinePeak(seg, sample); emit(sat, seg, track, opts, out); }
   return Math.ceil((t - t0) / (GRID_S * 1000));
+}
+
+// Ternary-search the highest point to ~1 s (samples are 10 s apart).
+function refinePeak(seg, sample) {
+  const pk = seg.peak;
+  if (pk === seg.start || pk === seg.end) return;
+  let lo = Math.max(seg.start.t, pk.t - FINE_S * 1000), hi = Math.min(seg.end.t, pk.t + FINE_S * 1000);
+  let best = pk;
+  for (let i = 0; i < 7; i++) {
+    const m1 = lo + (hi - lo) / 3, m2 = hi - (hi - lo) / 3;
+    const a = sample(m1), b = sample(m2);
+    if (!a || !b) return;
+    if (a.el > best.el) best = a;
+    if (b.el > best.el) best = b;
+    if (a.el < b.el) lo = m1; else hi = m2;
+  }
+  seg.peak = best;
+  if (best.mag < seg.best.mag) seg.best = best;
 }
 
 // Why visibility starts/ends at this sample: horizon, Earth's shadow or twilight.

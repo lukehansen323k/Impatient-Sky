@@ -1,1 +1,145 @@
-<!doctype html><meta charset="utf-8"><title>Impatient Sky</title><p>Impatient Sky is being built.</p>
+<!doctype html>
+<html lang="en" data-build="__BUILD__">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Impatient Sky</title>
+<meta name="description" content="Tonight's brightest satellite passes over you, a week ahead, and a live AR sky view.">
+<meta name="theme-color" content="#04060c">
+<meta name="color-scheme" content="dark">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Impatient Sky">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="css/app.css?b=__BUILD__">
+<link rel="modulepreload" href="js/app.js?b=__BUILD__">
+</head>
+<body>
+<canvas id="starfield" aria-hidden="true"></canvas>
+
+<!-- compact bar that fades in when the large title scrolls away -->
+<div id="navbar" class="glass navbar" aria-hidden="true"><span id="navbar-title">Tonight</span></div>
+
+<main id="app">
+  <!-- ============ TONIGHT ============ -->
+  <section class="view" id="view-tonight" data-view="tonight">
+    <header class="large-title">
+      <div>
+        <div class="eyebrow" id="t-eyebrow">&nbsp;</div>
+        <h1>Tonight</h1>
+      </div>
+      <button class="glass circle-btn" id="btn-refresh" aria-label="Refresh">
+        <svg viewBox="0 0 24 24"><use href="#i-refresh"/></svg>
+      </button>
+    </header>
+
+    <div id="t-status"></div>
+    <article class="glass card hero" id="hero" hidden></article>
+    <div class="chips" id="t-chips"></div>
+
+    <div class="table-tools">
+      <div class="segmented glass" id="sort-seg" role="tablist">
+        <button data-sort="time" class="on">Time</button>
+        <button data-sort="mag">Brightest</button>
+      </div>
+      <div class="limit-chip" id="limit-chip"></div>
+    </div>
+    <div class="glass card table" id="t-table"></div>
+    <p class="footnote" id="t-foot"></p>
+  </section>
+
+  <!-- ============ WEEK ============ -->
+  <section class="view" id="view-week" data-view="week" hidden>
+    <header class="large-title">
+      <div>
+        <div class="eyebrow">Next 7 nights</div>
+        <h1>Upcoming</h1>
+      </div>
+    </header>
+    <div class="day-strip" id="day-strip"></div>
+    <div id="w-best"></div>
+    <div class="section-label" id="w-label"></div>
+    <div class="glass card table" id="w-table"></div>
+  </section>
+
+  <!-- ============ SETTINGS ============ -->
+  <section class="view" id="view-settings" data-view="settings" hidden>
+    <header class="large-title">
+      <div>
+        <div class="eyebrow">Impatient Sky</div>
+        <h1>Settings</h1>
+      </div>
+    </header>
+    <div id="settings" class="settings"></div>
+  </section>
+</main>
+
+<!-- ============ TAB BAR ============ -->
+<nav class="tabbar-wrap" aria-label="Sections">
+  <div class="tabbar glass" id="tabbar">
+    <span class="tab-pill" id="tab-pill"></span>
+    <button data-tab="tonight" class="on"><svg viewBox="0 0 24 24"><use href="#i-moon"/></svg><span>Tonight</span></button>
+    <button data-tab="week"><svg viewBox="0 0 24 24"><use href="#i-calendar"/></svg><span>Upcoming</span></button>
+    <button data-tab="settings"><svg viewBox="0 0 24 24"><use href="#i-gear"/></svg><span>Settings</span></button>
+  </div>
+  <button class="glass sky-btn" id="btn-sky" aria-label="Open sky view">
+    <svg viewBox="0 0 24 24"><use href="#i-scope"/></svg>
+  </button>
+</nav>
+
+<!-- ============ PASS DETAIL SHEET ============ -->
+<div class="sheet-scrim" id="scrim" hidden></div>
+<section class="sheet glass" id="sheet" aria-modal="true" role="dialog" hidden>
+  <div class="grabber"></div>
+  <div id="sheet-body"></div>
+</section>
+
+<!-- ============ AR SKY VIEW ============ -->
+<section id="ar" hidden>
+  <video id="ar-video" playsinline muted autoplay></video>
+  <canvas id="ar-canvas"></canvas>
+  <div class="ar-top">
+    <button class="glass circle-btn" id="ar-close" aria-label="Close sky view"><svg viewBox="0 0 24 24"><use href="#i-close"/></svg></button>
+    <div class="glass ar-readout" id="ar-readout">Sky View</div>
+    <button class="glass circle-btn" id="ar-cam" aria-label="Camera on or off"><svg viewBox="0 0 24 24"><use href="#i-camera"/></svg></button>
+  </div>
+  <div class="ar-hint glass" id="ar-hint" hidden></div>
+  <div class="ar-bottom">
+    <div class="glass ar-card" id="ar-card"></div>
+    <div class="ar-tools">
+      <button class="glass pill-btn" id="ar-trim-l" aria-label="Rotate view left">⟲ 1°</button>
+      <button class="glass pill-btn" id="ar-align">Align</button>
+      <button class="glass pill-btn" id="ar-trim-r" aria-label="Rotate view right">1° ⟳</button>
+    </div>
+  </div>
+  <div class="ar-start" id="ar-start">
+    <div class="glass card ar-start-card">
+      <svg viewBox="0 0 24 24" class="big-icon"><use href="#i-scope"/></svg>
+      <h2>Point your phone at the sky</h2>
+      <p>Sky View uses your camera, compass and motion sensors to label every satellite overhead with its live brightness.</p>
+      <button class="primary-btn" id="ar-go">Start Sky View</button>
+      <button class="text-btn" id="ar-nosensor">Look around without sensors</button>
+    </div>
+  </div>
+</section>
+
+<!-- icons (SF Symbols-ish) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20.5 14.6A8.5 8.5 0 0 1 9.4 3.5a8.5 8.5 0 1 0 11.1 11.1Z" fill="currentColor"/><path d="M17 3.2l.5 1.3 1.3.5-1.3.5-.5 1.3-.5-1.3-1.3-.5 1.3-.5zM20.6 7.6l.35.9.9.35-.9.35-.35.9-.35-.9-.9-.35.9-.35z" fill="currentColor"/></symbol>
+  <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="3.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M3.5 9.6h17M8 3.2v3.4M16 3.2v3.4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="8.3" cy="13.6" r="1.2" fill="currentColor"/><circle cx="12" cy="13.6" r="1.2" fill="currentColor"/><circle cx="15.7" cy="13.6" r="1.2" fill="currentColor"/><circle cx="8.3" cy="17" r="1.2" fill="currentColor"/><circle cx="12" cy="17" r="1.2" fill="currentColor"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><path d="M12 8.6a3.4 3.4 0 1 0 0 6.8 3.4 3.4 0 0 0 0-6.8Zm8.2 2.2-1.7-.3a6.9 6.9 0 0 0-.7-1.7l1-1.4a.9.9 0 0 0-.1-1.2l-.9-.9a.9.9 0 0 0-1.2-.1l-1.4 1a6.9 6.9 0 0 0-1.7-.7l-.3-1.7a.9.9 0 0 0-.9-.8h-1.3a.9.9 0 0 0-.9.8l-.3 1.7a6.9 6.9 0 0 0-1.7.7l-1.4-1a.9.9 0 0 0-1.2.1l-.9.9a.9.9 0 0 0-.1 1.2l1 1.4a6.9 6.9 0 0 0-.7 1.7l-1.7.3a.9.9 0 0 0-.8.9v1.3c0 .5.3.8.8.9l1.7.3c.2.6.4 1.2.7 1.7l-1 1.4a.9.9 0 0 0 .1 1.2l.9.9c.3.3.8.4 1.2.1l1.4-1c.5.3 1.1.6 1.7.7l.3 1.7c.1.5.4.8.9.8h1.3c.5 0 .8-.3.9-.8l.3-1.7c.6-.2 1.2-.4 1.7-.7l1.4 1c.4.3.9.2 1.2-.1l.9-.9c.3-.3.4-.8.1-1.2l-1-1.4c.3-.5.6-1.1.7-1.7l1.7-.3c.5-.1.8-.4.8-.9v-1.3a.9.9 0 0 0-.8-.9Z" fill="currentColor"/></symbol>
+  <symbol id="i-scope" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.6" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="2.2" fill="currentColor"/><path d="M12 1.8v3.4M12 18.8v3.4M1.8 12h3.4M18.8 12h3.4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M19.4 12.9A7.5 7.5 0 1 1 17 6.6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M17.8 2.8v4.6h-4.6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
+  <symbol id="i-camera" viewBox="0 0 24 24"><path d="M4.5 7.5h3l1.6-2.2h5.8l1.6 2.2h3a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18V9a1.5 1.5 0 0 1 1.5-1.5Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="13" r="3.4" fill="none" stroke="currentColor" stroke-width="1.8"/></symbol>
+  <symbol id="i-location" viewBox="0 0 24 24"><path d="M20.6 3.4 3.4 10.6l7.2 2.8 2.8 7.2z" fill="currentColor"/></symbol>
+  <symbol id="i-shadow" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24"><path d="M9 5.5l6.5 6.5L9 18.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+</svg>
+
+<script type="module" src="js/app.js?b=__BUILD__"></script>
+</body>
+</html>
