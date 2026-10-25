@@ -1,0 +1,80 @@
+name: Update satellite data and deploy
+
+on:
+  schedule:
+    - cron: "11 */2 * * *"   # every 2 hours
+  workflow_dispatch:          # "Run workflow" button
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: sky-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - id: pages
+        uses: actions/configure-pages@v5
+        continue-on-error: true   # first run before Pages is switched on still builds data
+
+      # qs.mag and the SATCAT only change daily; keep them between runs.
+      - uses: actions/cache@v4
+        with:
+          path: .cache
+          key: sky-cache-${{ github.run_id }}
+          restore-keys: sky-cache-
+
+      - name: Build catalog (CelesTrak + McCants magnitudes)
+        env:
+          PREVIOUS_URL: ${{ steps.pages.outputs.base_url && format('{0}/data/catalog.json', steps.pages.outputs.base_url) || '' }}
+          SPACETRACK_USER: ${{ secrets.SPACETRACK_USER }}   # optional, adds the full catalog
+          SPACETRACK_PASS: ${{ secrets.SPACETRACK_PASS }}
+        run: node scripts/build-data.mjs
+
+      - name: Keep a copy of the data for debugging
+        uses: actions/upload-artifact@v4
+        with:
+          name: data
+          path: data
+          retention-days: 3
+
+      - name: Assemble site
+        run: |
+          mkdir -p _site
+          for f in index.html manifest.webmanifest sw.js css js icons data; do if [ -e "$f" ]; then cp -r "$f" _site/; fi; done
+          for f in _site/sw.js _site/index.html; do if [ -e "$f" ]; then sed -i "s/__BUILD__/$(date -u +%Y%m%d%H%M)/g" "$f"; fi; done
+
+      # Scheduled workflows stop after 60 days without a commit. Nudge the repo monthly.
+      - name: Keep the schedule alive
+        if: github.event_name == 'schedule'
+        run: |
+          last=$(git log -1 --format=%ct)
+          if [ $(( $(date +%s) - last )) -gt 2160000 ]; then
+            date -u +%FT%TZ > .heartbeat
+            git config user.name "sky-bot"
+            git config user.email "sky-bot@users.noreply.github.com"
+            git add .heartbeat && git commit -m "Heartbeat" && git push || true
+          fi
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deploy
+        uses: actions/deploy-pages@v4
