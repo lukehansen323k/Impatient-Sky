@@ -41,19 +41,29 @@ jobs:
           key: sky-cache-${{ github.run_id }}
           restore-keys: sky-cache-
 
+      # The last good catalog lives on the data-snapshot branch (one commit, force-pushed),
+      # so a source outage republishes slightly older data instead of nothing.
+      - name: Restore previous catalog
+        run: |
+          if git fetch --depth 1 origin data-snapshot 2>/dev/null; then
+            git show FETCH_HEAD:catalog.json > data/catalog.json || true
+          fi
+
       - name: Build catalog (CelesTrak + McCants magnitudes)
         env:
-          PREVIOUS_URL: ${{ steps.pages.outputs.base_url && format('{0}/data/catalog.json', steps.pages.outputs.base_url) || '' }}
           SPACETRACK_USER: ${{ secrets.SPACETRACK_USER }}   # optional, adds the full catalog
           SPACETRACK_PASS: ${{ secrets.SPACETRACK_PASS }}
         run: node scripts/build-data.mjs
 
-      - name: Keep a copy of the data for debugging
-        uses: actions/upload-artifact@v4
-        with:
-          name: data
-          path: data
-          retention-days: 3
+      - name: Save data snapshot
+        run: |
+          rm -rf /tmp/snap && mkdir /tmp/snap && cp data/catalog.json data/meta.json /tmp/snap/
+          cd /tmp/snap
+          git init -q -b data-snapshot
+          git config user.name "sky-bot"
+          git config user.email "sky-bot@users.noreply.github.com"
+          git add -A && git commit -qm "Data $(date -u +%FT%TZ)"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" data-snapshot
 
       - name: Assemble site
         run: |
