@@ -1,0 +1,27 @@
+{
+ "v": "20261121T1723Z",
+ "built": "2026-11-21T17:23:25.374Z",
+ "count": 16201,
+ "newestEpoch": "2026-11-21T15:09:17.343072",
+ "bytes": 2698819,
+ "sources": {
+  "previous": 16199,
+  "celestrak": {
+   "visual": 157,
+   "stations": 17,
+   "active": 16915,
+   "last-30-days": 202
+  },
+  "qsmag": 4166,
+  "satcat": 35590
+ },
+ "counts": {
+  "kept": 16201,
+  "stale": 0,
+  "faint": 295,
+  "decaying": 0,
+  "geo": 596,
+  "docked": 12
+ },
+ "note": "Elements: CelesTrak (and Space-Track if configured). Intrinsic magnitudes: M. McCants qs.mag; constellation values from Mallama et al. 2025."
+}
